@@ -115,7 +115,7 @@ if not df.empty:
         # Add MarkLine for 100 baseline
         line.set_series_opts(
             markline_opts=opts.MarkLineOpts(
-                data=[opts.MarkLineItem(y_axis=100, label="Prev Year Close")],
+                data=[opts.MarkLineItem(y=100, name="Prev Year Close")],
                 linestyle_opts=opts.LineStyleOpts(type_="dashed", color="gray", opacity=0.5)
             )
         )
