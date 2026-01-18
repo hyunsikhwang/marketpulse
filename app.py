@@ -114,7 +114,7 @@ if not df.empty:
         normalized_df = normalized_df.dropna(axis=1, how='all')
         
         # Custom Card Animation Layout
-        # 1. Define original vs sorted order
+        import json
         original_order = list(normalized_df.columns)
         latest_perf_series = normalized_df.iloc[-1]
         sorted_order = latest_perf_series.sort_values(ascending=False).index.tolist()
@@ -124,11 +124,14 @@ if not df.empty:
         for name in original_order:
             val = latest_perf_series[name]
             ytd_pct = val - 100
-            trend_color = "#e63946" if ytd_pct < 0 else "#2a9d8f" # Red for loss, Green for gain
+            trend_color = "#e63946" if ytd_pct < 0 else "#2a9d8f"
             trend_symbol = "▼" if ytd_pct < 0 else "▲"
             
+            # Sanitize ID: only alphanumeric
+            safe_id = "".join(filter(str.isalnum, name))
+            
             cards_html += f"""
-            <div class="metric-card" id="card-{name.replace(' ', '-').replace('&', 'and')}" data-name="{name}">
+            <div class="metric-card" id="card-{safe_id}" data-name="{name}">
                 <div class="metric-label">{name}</div>
                 <div class="metric-value">{val:.2f}</div>
                 <div class="metric-trend" style="color: {trend_color};">
@@ -145,8 +148,8 @@ if not df.empty:
                 flex-wrap: wrap;
                 gap: 15px;
                 padding: 10px 0;
-                perspective: 1000px;
                 min-height: 150px;
+                position: relative;
             }}
             .metric-card {{
                 background-color: #f0f2f6;
@@ -155,36 +158,23 @@ if not df.empty:
                 padding: 20px;
                 min-width: 200px;
                 flex: 1 1 calc(25% - 15px);
-                box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-                transition: transform 0.3s ease, box-shadow 0.3s ease;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
                 display: flex;
                 flex-direction: column;
                 justify-content: center;
-                /* Animation property for the sorting transition */
                 position: relative;
+                z-index: 1;
             }}
             .metric-card:hover {{
                 transform: translateY(-5px);
-                box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+                box-shadow: 0 8px 15px rgba(0,0,0,0.15);
+                z-index: 10;
             }}
-            .metric-label {{
-                font-size: 0.9rem;
-                color: #555e6d;
-                font-weight: 600;
-                margin-bottom: 8px;
-            }}
-            .metric-value {{
-                font-size: 1.8rem;
-                font-weight: 800;
-                color: #1b1d21;
-                margin-bottom: 4px;
-            }}
-            .metric-trend {{
-                font-size: 1rem;
-                font-weight: 700;
-            }}
+            .metric-label {{ font-size: 0.9rem; color: #555e6d; font-weight: 600; margin-bottom: 8px; }}
+            .metric-value {{ font-size: 1.8rem; font-weight: 800; color: #1b1d21; margin-bottom: 4px; }}
+            .metric-trend {{ font-size: 1rem; font-weight: 700; }}
             
-            /* Responsive adjustments */
+            /* Responsive */
             @media (max-width: 1200px) {{ .metric-card {{ flex: 1 1 calc(33.33% - 15px); }} }}
             @media (max-width: 768px) {{ .metric-card {{ flex: 1 1 calc(50% - 15px); }} }}
             @media (max-width: 480px) {{ .metric-card {{ flex: 1 1 100%; }} }}
@@ -200,41 +190,44 @@ if not df.empty:
                 if (!grid) return;
                 
                 const cards = Array.from(grid.querySelectorAll('.metric-card'));
-                const sortedOrder = {sorted_order};
+                const sortedOrder = {json.dumps(sorted_order)};
                 
-                // FLIP animation: First
-                const firstPositions = cards.map(card => card.getBoundingClientRect());
+                // 1. Capture "First" positions
+                const firstRects = new Map();
+                cards.forEach(card => {{
+                    firstRects.set(card.getAttribute('data-name'), card.getBoundingClientRect());
+                }});
                 
-                // Wait a bit before starting the sort for visual impact
                 setTimeout(() => {{
-                    // Last
+                    // 2. Re-order in DOM to get "Last" positions
                     const sortedCards = sortedOrder.map(name => 
                         cards.find(c => c.getAttribute('data-name') === name)
-                    ).filter(c => c !== undefined);
+                    ).filter(Boolean);
                     
-                    // Clear and Re-append in sorted order
+                    // Detach and re-attach in order
                     sortedCards.forEach(card => grid.appendChild(card));
                     
-                    // Invert & Play
-                    sortedCards.forEach((card, i) => {{
-                        const lastPos = card.getBoundingClientRect();
-                        const firstPos = firstPositions.find((p, idx) => cards[idx].getAttribute('data-name') === card.getAttribute('data-name'));
+                    // 3. Invert and Play
+                    sortedCards.forEach(card => {{
+                        const name = card.getAttribute('data-name');
+                        const firstRect = firstRects.get(name);
+                        const lastRect = card.getBoundingClientRect();
                         
-                        const dx = firstPos.left - lastPos.left;
-                        const dy = firstPos.top - lastPos.top;
+                        const dx = firstRect.left - lastRect.left;
+                        const dy = firstRect.top - lastRect.top;
                         
-                        // Transition setup
+                        if (dx === 0 && dy === 0) return;
+                        
                         card.style.transition = 'none';
                         card.style.transform = `translate(${{dx}}px, ${{dy}}px)`;
                         
-                        // Force reflow
+                        // Reflow
                         card.offsetHeight;
                         
-                        // Play
-                        card.style.transition = 'transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                        card.style.transition = 'transform 1s cubic-bezier(0.34, 1.56, 0.64, 1)';
                         card.style.transform = 'translate(0, 0)';
                     }});
-                }}, 800);
+                }}, 500);
             }})();
             </script>
         """, unsafe_allow_html=True)
