@@ -241,6 +241,7 @@ if not df.empty:
 
         # ECharts Visualization
         st.markdown("<br>", unsafe_allow_html=True)
+        x_data = normalized_df.index.strftime('%Y-%m-%d').tolist()
         
         line = (
             Line(init_opts=opts.InitOpts(theme="dark", height="600px", width="100%"))
