@@ -113,18 +113,134 @@ if not df.empty:
         # Drop columns that are all NaN (if any failed to download)
         normalized_df = normalized_df.dropna(axis=1, how='all')
         
-        # Metrics Display
-        # Sort by performance (descending)
-        latest_performance = normalized_df.iloc[-1].sort_values(ascending=False)
+        # Custom Card Animation Layout
+        # 1. Define original vs sorted order
+        original_order = list(normalized_df.columns)
+        latest_perf_series = normalized_df.iloc[-1]
+        sorted_order = latest_perf_series.sort_values(ascending=False).index.tolist()
         
-        cols = st.columns(4)
-        for i, (name, val) in enumerate(latest_performance.items()):
-            col = cols[i % 4]
+        # 2. Generate HTML for cards
+        cards_html = ""
+        for name in original_order:
+            val = latest_perf_series[name]
             ytd_pct = val - 100
-            col.metric(name, f"{val:.2f}", f"{ytd_pct:+.2f}%")
+            trend_color = "#e63946" if ytd_pct < 0 else "#2a9d8f" # Red for loss, Green for gain
+            trend_symbol = "▼" if ytd_pct < 0 else "▲"
+            
+            cards_html += f"""
+            <div class="metric-card" id="card-{name.replace(' ', '-').replace('&', 'and')}" data-name="{name}">
+                <div class="metric-label">{name}</div>
+                <div class="metric-value">{val:.2f}</div>
+                <div class="metric-trend" style="color: {trend_color};">
+                    {trend_symbol} {abs(ytd_pct):.2f}%
+                </div>
+            </div>
+            """
+
+        # 3. Inject CSS and HTML
+        st.markdown(f"""
+            <style>
+            .metrics-container {{
+                display: flex;
+                flex-wrap: wrap;
+                gap: 15px;
+                padding: 10px 0;
+                perspective: 1000px;
+                min-height: 150px;
+            }}
+            .metric-card {{
+                background-color: #f0f2f6;
+                border: 1px solid #dcdfe4;
+                border-radius: 12px;
+                padding: 20px;
+                min-width: 200px;
+                flex: 1 1 calc(25% - 15px);
+                box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+                transition: transform 0.3s ease, box-shadow 0.3s ease;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                /* Animation property for the sorting transition */
+                position: relative;
+            }}
+            .metric-card:hover {{
+                transform: translateY(-5px);
+                box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+            }}
+            .metric-label {{
+                font-size: 0.9rem;
+                color: #555e6d;
+                font-weight: 600;
+                margin-bottom: 8px;
+            }}
+            .metric-value {{
+                font-size: 1.8rem;
+                font-weight: 800;
+                color: #1b1d21;
+                margin-bottom: 4px;
+            }}
+            .metric-trend {{
+                font-size: 1rem;
+                font-weight: 700;
+            }}
+            
+            /* Responsive adjustments */
+            @media (max-width: 1200px) {{ .metric-card {{ flex: 1 1 calc(33.33% - 15px); }} }}
+            @media (max-width: 768px) {{ .metric-card {{ flex: 1 1 calc(50% - 15px); }} }}
+            @media (max-width: 480px) {{ .metric-card {{ flex: 1 1 100%; }} }}
+            </style>
+            
+            <div class="metrics-container" id="metrics-grid">
+                {cards_html}
+            </div>
+            
+            <script>
+            (function() {{
+                const grid = document.getElementById('metrics-grid');
+                if (!grid) return;
+                
+                const cards = Array.from(grid.querySelectorAll('.metric-card'));
+                const sortedOrder = {sorted_order};
+                
+                // FLIP animation: First
+                const firstPositions = cards.map(card => card.getBoundingClientRect());
+                
+                // Wait a bit before starting the sort for visual impact
+                setTimeout(() => {{
+                    // Last
+                    const sortedCards = sortedOrder.map(name => 
+                        cards.find(c => c.getAttribute('data-name') === name)
+                    ).filter(c => c !== undefined);
+                    
+                    // Clear and Re-append in sorted order
+                    sortedCards.forEach(card => grid.appendChild(card));
+                    
+                    // Invert & Play
+                    sortedCards.forEach((card, i) => {{
+                        const lastPos = card.getBoundingClientRect();
+                        const firstPos = firstPositions.find((p, idx) => cards[idx].getAttribute('data-name') === card.getAttribute('data-name'));
+                        
+                        const dx = firstPos.left - lastPos.left;
+                        const dy = firstPos.top - lastPos.top;
+                        
+                        // Transition setup
+                        card.style.transition = 'none';
+                        card.style.transform = `translate(${{dx}}px, ${{dy}}px)`;
+                        
+                        // Force reflow
+                        card.offsetHeight;
+                        
+                        // Play
+                        card.style.transition = 'transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                        card.style.transform = 'translate(0, 0)';
+                    }});
+                }}, 800);
+            }})();
+            </script>
+        """, unsafe_allow_html=True)
 
         # ECharts Visualization
-        x_data = normalized_df.index.strftime('%Y-%m-%d').tolist()
+        st.markdown("<br>", unsafe_allow_html=True)
         
         line = (
             Line(init_opts=opts.InitOpts(theme="dark", height="600px", width="100%"))
