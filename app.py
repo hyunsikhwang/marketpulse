@@ -140,77 +140,90 @@ if not df.empty:
             </div>
             """
 
-        # 3. Inject CSS and HTML
-        st.markdown(f"""
+        # 3. Inject into a components.html block for reliable JS execution
+        import streamlit.components.v1 as components
+        
+        # Calculate dynamic height: ~150px per row of 4
+        num_rows = (len(original_order) + 3) // 4
+        component_height = num_rows * 160 + 20
+
+        components.html(f"""
             <style>
+            body {{
+                margin: 0;
+                padding: 0;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                background-color: transparent;
+                overflow: hidden;
+            }}
             .metrics-container {{
                 display: flex;
                 flex-wrap: wrap;
                 gap: 15px;
-                padding: 10px 0;
-                min-height: 150px;
-                position: relative;
+                padding: 10px;
+                background-color: transparent;
             }}
             .metric-card {{
                 background-color: #f0f2f6;
                 border: 1px solid #dcdfe4;
                 border-radius: 12px;
-                padding: 20px;
-                min-width: 200px;
+                padding: 15px;
+                min-width: 180px;
                 flex: 1 1 calc(25% - 15px);
-                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                box-shadow: 0 4px 6px rgba(0,0,0,0.05);
                 display: flex;
                 flex-direction: column;
                 justify-content: center;
-                position: relative;
-                z-index: 1;
+                box-sizing: border-box;
+                /* Initial state for opacity to make entry feel smooth */
+                opacity: 0;
+                transform: scale(0.9);
+                transition: opacity 0.5s ease, transform 0.5s ease;
             }}
-            .metric-card:hover {{
-                transform: translateY(-5px);
-                box-shadow: 0 8px 15px rgba(0,0,0,0.15);
-                z-index: 10;
+            .metric-card.ready {{
+                opacity: 1;
+                transform: scale(1);
             }}
-            .metric-label {{ font-size: 0.9rem; color: #555e6d; font-weight: 600; margin-bottom: 8px; }}
-            .metric-value {{ font-size: 1.8rem; font-weight: 800; color: #1b1d21; margin-bottom: 4px; }}
-            .metric-trend {{ font-size: 1rem; font-weight: 700; }}
+            .metric-label {{ font-size: 0.85rem; color: #555e6d; font-weight: 600; margin-bottom: 5px; }}
+            .metric-value {{ font-size: 1.6rem; font-weight: 800; color: #1b1d21; margin-bottom: 2px; }}
+            .metric-trend {{ font-size: 0.95rem; font-weight: 700; }}
             
-            /* Responsive */
-            @media (max-width: 1200px) {{ .metric-card {{ flex: 1 1 calc(33.33% - 15px); }} }}
-            @media (max-width: 768px) {{ .metric-card {{ flex: 1 1 calc(50% - 15px); }} }}
-            @media (max-width: 480px) {{ .metric-card {{ flex: 1 1 100%; }} }}
+            @media (max-width: 1000px) {{ .metric-card {{ flex: 1 1 calc(33.33% - 15px); }} }}
+            @media (max-width: 700px) {{ .metric-card {{ flex: 1 1 calc(50% - 15px); }} }}
             </style>
             
-            <div class="metrics-container" id="metrics-grid">
+            <div class="metrics-container" id="grid">
                 {cards_html}
             </div>
             
             <script>
-            (function() {{
-                const grid = document.getElementById('metrics-grid');
-                if (!grid) return;
-                
+            window.onload = function() {{
+                const grid = document.getElementById('grid');
                 const cards = Array.from(grid.querySelectorAll('.metric-card'));
                 const sortedOrder = {json.dumps(sorted_order)};
                 
-                // 1. Capture "First" positions
-                const firstRects = new Map();
-                cards.forEach(card => {{
-                    firstRects.set(card.getAttribute('data-name'), card.getBoundingClientRect());
-                }});
-                
+                // Show cards
                 setTimeout(() => {{
-                    // 2. Re-order in DOM to get "Last" positions
+                    cards.forEach(c => c.classList.add('ready'));
+                }}, 100);
+
+                // Start FLIP after a delay
+                setTimeout(() => {{
+                    // 1. First
+                    const firstRects = cards.map(c => c.getBoundingClientRect());
+                    
+                    // 2. Last (Rearrange DOM)
                     const sortedCards = sortedOrder.map(name => 
                         cards.find(c => c.getAttribute('data-name') === name)
                     ).filter(Boolean);
                     
-                    // Detach and re-attach in order
-                    sortedCards.forEach(card => grid.appendChild(card));
+                    sortedCards.forEach(c => grid.appendChild(c));
                     
                     // 3. Invert and Play
-                    sortedCards.forEach(card => {{
+                    sortedCards.forEach((card, i) => {{
                         const name = card.getAttribute('data-name');
-                        const firstRect = firstRects.get(name);
+                        const originalIndex = cards.findIndex(c => c.getAttribute('data-name') === name);
+                        const firstRect = firstRects[originalIndex];
                         const lastRect = card.getBoundingClientRect();
                         
                         const dx = firstRect.left - lastRect.left;
@@ -221,16 +234,15 @@ if not df.empty:
                         card.style.transition = 'none';
                         card.style.transform = `translate(${{dx}}px, ${{dy}}px)`;
                         
-                        // Reflow
-                        card.offsetHeight;
-                        
-                        card.style.transition = 'transform 1s cubic-bezier(0.34, 1.56, 0.64, 1)';
-                        card.style.transform = 'translate(0, 0)';
+                        requestAnimationFrame(() => {{
+                            card.style.transition = 'transform 1.2s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                            card.style.transform = 'translate(0, 0)';
+                        }});
                     }});
-                }}, 500);
-            }})();
+                }}, 1000);
+            }};
             </script>
-        """, unsafe_allow_html=True)
+        """, height=component_height)
 
         # ECharts Visualization
         st.markdown("<br>", unsafe_allow_html=True)
