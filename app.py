@@ -95,7 +95,7 @@ if not df.empty:
                 series_name=name,
                 y_axis=normalized_df[name].round(2).tolist(),
                 symbol="none",
-                is_smooth=True,
+                is_smooth=False,
                 label_opts=opts.LabelOpts(is_show=False),
             )
             
