@@ -40,7 +40,9 @@ indices = {
     'Nifty50': '^NSEI',
     'Sensex': '^BSESN',
     'KOSPI': '^KS11',
-    'KOSDAQ': '^KQ11'
+    'KOSDAQ': '^KQ11',
+    'CSI 300': '000300.SS',
+    'SSE STAR 50': '000688.SS'
 }
 
 @st.cache_data(ttl=3600)
@@ -119,10 +121,11 @@ if not df.empty:
             .add_xaxis(xaxis_data=x_data)
         )
         
-        # 8 High Contrast Modern Colors
+        # 10 High Contrast Modern Colors
         colors = [
             '#5470c6', '#91cc75', '#fac858', '#ee6666', 
-            '#73c0de', '#3ba272', '#fc8452', '#9a60b4'
+            '#73c0de', '#3ba272', '#fc8452', '#9a60b4',
+            '#ea7ccc', '#516b91'
         ]
         
         for i, name in enumerate(normalized_df.columns):
