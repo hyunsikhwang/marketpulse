@@ -156,7 +156,7 @@ if not df.empty:
                 splitline_opts=opts.SplitLineOpts(is_show=True, linestyle_opts=opts.LineStyleOpts(opacity=0.1)),
             ),
             # Show full period (0-100%) by default
-            datazoom_opts=[opts.DataZoomOpts(is_show=True, type_="slider", start=0, end=100)],
+            datazoom_opts=[opts.DataZoomOpts(is_show=True, type_="slider", range_start=0, range_end=100)],
         )
         
         # Add MarkLine for 100 baseline
