@@ -20,10 +20,17 @@ st.markdown("""
         background-color: #0e1117;
     }
     .stMetric {
-        background-color: #161b22;
+        background-color: #f0f2f6;
         padding: 15px;
         border-radius: 10px;
-        border: 1px solid #30363d;
+        border: 1px solid #dcdfe4;
+        color: #31333F;
+    }
+    .stMetric label {
+        color: #555e6d !important;
+    }
+    .stMetric [data-testid="stMetricValue"] {
+        color: #1b1d21 !important;
     }
     </style>
     """, unsafe_allow_html=True)
