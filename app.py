@@ -143,9 +143,9 @@ if not df.empty:
         # 3. Inject into a components.html block for reliable JS execution
         import streamlit.components.v1 as components
         
-        # Calculate dynamic height: ~150px per row of 4
+        # Calculate dynamic height: more compact (~120px per row)
         num_rows = (len(original_order) + 3) // 4
-        component_height = num_rows * 160 + 20
+        component_height = num_rows * 135 + 10
 
         components.html(f"""
             <style>
@@ -159,22 +159,21 @@ if not df.empty:
             .metrics-container {{
                 display: flex;
                 flex-wrap: wrap;
-                gap: 15px;
-                padding: 10px;
+                gap: 12px;
+                padding: 5px;
                 background-color: transparent;
             }}
             .metric-card {{
                 background-color: #f0f2f6;
                 border: 1px solid #dcdfe4;
                 border-radius: 12px;
-                padding: 15px;
-                min-width: 180px;
-                flex: 1 1 calc(25% - 15px);
+                padding: 12px 15px;
+                width: calc(25% - 12px); /* Fixed width for uniformity */
+                box-sizing: border-box;
                 box-shadow: 0 4px 6px rgba(0,0,0,0.05);
                 display: flex;
                 flex-direction: column;
                 justify-content: center;
-                box-sizing: border-box;
                 /* Initial state for opacity to make entry feel smooth */
                 opacity: 0;
                 transform: scale(0.9);
@@ -184,12 +183,13 @@ if not df.empty:
                 opacity: 1;
                 transform: scale(1);
             }}
-            .metric-label {{ font-size: 0.85rem; color: #555e6d; font-weight: 600; margin-bottom: 5px; }}
-            .metric-value {{ font-size: 1.6rem; font-weight: 800; color: #1b1d21; margin-bottom: 2px; }}
-            .metric-trend {{ font-size: 0.95rem; font-weight: 700; }}
+            .metric-label {{ font-size: 0.8rem; color: #555e6d; font-weight: 600; margin-bottom: 2px; }}
+            .metric-value {{ font-size: 1.4rem; font-weight: 800; color: #1b1d21; margin-bottom: 0px; }}
+            .metric-trend {{ font-size: 0.9rem; font-weight: 700; }}
             
-            @media (max-width: 1000px) {{ .metric-card {{ flex: 1 1 calc(33.33% - 15px); }} }}
-            @media (max-width: 700px) {{ .metric-card {{ flex: 1 1 calc(50% - 15px); }} }}
+            @media (max-width: 1000px) {{ .metric-card {{ width: calc(33.33% - 12px); }} }}
+            @media (max-width: 700px) {{ .metric-card {{ width: calc(50% - 12px); }} }}
+            @media (max-width: 480px) {{ .metric-card {{ width: 100%; }} }}
             </style>
             
             <div class="metrics-container" id="grid">
@@ -205,21 +205,17 @@ if not df.empty:
                 // Show cards
                 setTimeout(() => {{
                     cards.forEach(c => c.classList.add('ready'));
-                }}, 100);
+                }}, 50);
 
                 // Start FLIP after a delay
                 setTimeout(() => {{
-                    // 1. First
                     const firstRects = cards.map(c => c.getBoundingClientRect());
-                    
-                    // 2. Last (Rearrange DOM)
                     const sortedCards = sortedOrder.map(name => 
                         cards.find(c => c.getAttribute('data-name') === name)
                     ).filter(Boolean);
                     
                     sortedCards.forEach(c => grid.appendChild(c));
                     
-                    // 3. Invert and Play
                     sortedCards.forEach((card, i) => {{
                         const name = card.getAttribute('data-name');
                         const originalIndex = cards.findIndex(c => c.getAttribute('data-name') === name);
@@ -235,17 +231,16 @@ if not df.empty:
                         card.style.transform = `translate(${{dx}}px, ${{dy}}px)`;
                         
                         requestAnimationFrame(() => {{
-                            card.style.transition = 'transform 1.2s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                            card.style.transition = 'transform 1s cubic-bezier(0.34, 1.56, 0.64, 1)';
                             card.style.transform = 'translate(0, 0)';
                         }});
                     }});
-                }}, 1000);
+                }}, 800);
             }};
             </script>
         """, height=component_height)
 
-        # ECharts Visualization
-        st.markdown("<br>", unsafe_allow_html=True)
+        # ECharts Visualization (Reduced spacing)
         x_data = normalized_df.index.strftime('%Y-%m-%d').tolist()
         
         line = (
