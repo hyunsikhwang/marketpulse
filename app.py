@@ -119,26 +119,44 @@ if not df.empty:
             .add_xaxis(xaxis_data=x_data)
         )
         
-        for name in normalized_df.columns:
+        # 8 High Contrast Modern Colors
+        colors = [
+            '#5470c6', '#91cc75', '#fac858', '#ee6666', 
+            '#73c0de', '#3ba272', '#fc8452', '#9a60b4'
+        ]
+        
+        for i, name in enumerate(normalized_df.columns):
             line.add_yaxis(
                 series_name=name,
                 y_axis=normalized_df[name].round(2).tolist(),
                 symbol="none",
-                is_smooth=False,
+                is_smooth=True,
                 label_opts=opts.LabelOpts(is_show=False),
+                linestyle_opts=opts.LineStyleOpts(width=2),
+                # Show label at the end of the line for easy identification
+                end_label_opts=opts.LabelOpts(
+                    is_show=True, 
+                    formatter=name, 
+                    position="right",
+                    font_size=12,
+                    font_weight="bold",
+                    color=colors[i % len(colors)]
+                )
             )
             
         line.set_global_opts(
             title_opts=opts.TitleOpts(title="Index Performance (Base 100)", subtitle="Relative to Prev Year Close"),
             tooltip_opts=opts.TooltipOpts(trigger="axis", axis_pointer_type="cross"),
-            legend_opts=opts.LegendOpts(pos_top="5%", pos_right="5%"),
+            # Legend at the top for fallback identification
+            legend_opts=opts.LegendOpts(pos_top="5%", pos_right="5%", orient="horizontal"),
             xaxis_opts=opts.AxisOpts(type_="category", boundary_gap=False),
             yaxis_opts=opts.AxisOpts(
                 type_="value", 
                 min_="dataMin",
-                splitline_opts=opts.SplitLineOpts(is_show=True),
+                splitline_opts=opts.SplitLineOpts(is_show=True, linestyle_opts=opts.LineStyleOpts(opacity=0.1)),
             ),
-            datazoom_opts=[opts.DataZoomOpts(is_show=True, type_="slider")],
+            # Show full period (0-100%) by default
+            datazoom_opts=[opts.DataZoomOpts(is_show=True, type_="slider", start=0, end=100)],
         )
         
         # Add MarkLine for 100 baseline
