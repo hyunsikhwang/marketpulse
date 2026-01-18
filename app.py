@@ -47,33 +47,62 @@ indices = {
 def fetch_data(indices_dict):
     today = datetime.now()
     current_year = today.year
-    start_date = datetime(current_year - 1, 12, 15).strftime('%Y-%m-%d')
+    start_date = datetime(current_year - 1, 12, 10).strftime('%Y-%m-%d')
     end_date = today.strftime('%Y-%m-%d')
     
-    all_data = pd.DataFrame()
-    for name, ticker in indices_dict.items():
-        try:
-            data = yf.download(ticker, start=start_date, end=end_date)['Close']
-            if not data.empty:
-                if isinstance(data, pd.DataFrame):
-                    data = data.iloc[:, 0]
-                all_data[name] = data
-        except Exception as e:
-            st.error(f"Error fetching {name}: {e}")
-    return all_data
+    tickers = list(indices_dict.values())
+    names = list(indices_dict.keys())
+    
+    try:
+        # Download all tickers at once for better indexing alignment
+        data = yf.download(tickers, start=start_date, end=end_date, progress=False)
+        
+        if data.empty:
+            return pd.DataFrame()
+            
+        # Extract 'Close' prices
+        if 'Close' in data.columns.levels[0] if isinstance(data.columns, pd.MultiIndex) else False:
+            all_close = data['Close']
+        else:
+            # Fallback for single ticker or different structure
+            all_close = data[['Close']] if 'Close' in data.columns else data
+            
+        # Rename columns from Ticker to Name
+        # Create a mapping from Ticker to Name
+        inv_indices = {v: k for k, v in indices_dict.items()}
+        all_close = all_close.rename(columns=inv_indices)
+        
+        # Forward fill to handle different market holidays
+        all_close = all_close.ffill()
+        
+        return all_close
+        
+    except Exception as e:
+        st.error(f"Error fetching data: {e}")
+        return pd.DataFrame()
 
 with st.spinner('데이터를 불러오고 있습니다...'):
     df = fetch_data(indices)
 
 if not df.empty:
     current_year = datetime.now().year
-    prev_year_data = df[df.index.year == (current_year - 1)]
+    # 1. Split data
+    prev_year_df = df[df.index.year == (current_year - 1)]
+    current_year_df = df[df.index.year == current_year]
     
-    if not prev_year_data.empty:
-        last_close_prev_year = prev_year_data.iloc[-1]
-        current_year_df = df[df.index.year == current_year]
-        combined_df = pd.concat([prev_year_data.tail(1), current_year_df])
+    if not prev_year_df.empty:
+        # 2. Calculate baseline for EACH index individually (last non-NaN value of prev year)
+        # Since we already did ffill(), we can just take the last row of prev_year_df
+        last_close_prev_year = prev_year_df.iloc[-1]
+        
+        # 3. Combine for visualization (including the last day of prev year)
+        combined_df = pd.concat([prev_year_df.tail(1), current_year_df])
+        
+        # 4. Normalize to Base 100
         normalized_df = (combined_df / last_close_prev_year) * 100
+        
+        # Drop columns that are all NaN (if any failed to download)
+        normalized_df = normalized_df.dropna(axis=1, how='all')
         
         # Metrics Display
         cols = st.columns(4)
