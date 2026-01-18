@@ -114,8 +114,11 @@ if not df.empty:
         normalized_df = normalized_df.dropna(axis=1, how='all')
         
         # Metrics Display
+        # Sort by performance (descending)
+        latest_performance = normalized_df.iloc[-1].sort_values(ascending=False)
+        
         cols = st.columns(4)
-        for i, (name, val) in enumerate(normalized_df.iloc[-1].items()):
+        for i, (name, val) in enumerate(latest_performance.items()):
             col = cols[i % 4]
             ytd_pct = val - 100
             col.metric(name, f"{val:.2f}", f"{ytd_pct:+.2f}%")
