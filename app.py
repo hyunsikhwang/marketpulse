@@ -1,12 +1,14 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import plotly.graph_objects as go
-from datetime import datetime, timedelta
+from pyecharts import options as opts
+from pyecharts.charts import Line
+from streamlit_echarts import st_pyecharts
+from datetime import datetime
 
 # Page configuration
 st.set_page_config(
-    page_title="Global Index Tracker",
+    page_title="Global Index Tracker (ECharts)",
     page_icon="📈",
     layout="wide"
 )
@@ -26,7 +28,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🌍 Global Stock Index Performance")
+st.title("🌍 Global Stock Index Performance (ECharts)")
 st.markdown("전년도 마지막 종가 기준 올해 수익률 추이 (Base 100)")
 
 # Indices definition
@@ -43,49 +45,34 @@ indices = {
 
 @st.cache_data(ttl=3600)
 def fetch_data(indices_dict):
-    # Current date
     today = datetime.now()
     current_year = today.year
-    
-    # Start date to ensure we get the last trading day of the previous year
-    # Taking Dec 15th of previous year to stay safe
     start_date = datetime(current_year - 1, 12, 15).strftime('%Y-%m-%d')
     end_date = today.strftime('%Y-%m-%d')
     
     all_data = pd.DataFrame()
-    
     for name, ticker in indices_dict.items():
         try:
             data = yf.download(ticker, start=start_date, end=end_date)['Close']
             if not data.empty:
-                # Flatten MultiIndex if necessary (yfinance v0.2.40+ might return MultiIndex)
                 if isinstance(data, pd.DataFrame):
                     data = data.iloc[:, 0]
                 all_data[name] = data
         except Exception as e:
             st.error(f"Error fetching {name}: {e}")
-            
     return all_data
 
 with st.spinner('데이터를 불러오고 있습니다...'):
     df = fetch_data(indices)
 
 if not df.empty:
-    # 1. Identify the last trading day of the previous year
     current_year = datetime.now().year
     prev_year_data = df[df.index.year == (current_year - 1)]
     
     if not prev_year_data.empty:
         last_close_prev_year = prev_year_data.iloc[-1]
-        
-        # 2. Filter data for the current year
         current_year_df = df[df.index.year == current_year]
-        
-        # 3. Add the last close of previous year as the starting point (index 0) 
-        # for visualization to show growth from Day 1.
         combined_df = pd.concat([prev_year_data.tail(1), current_year_df])
-        
-        # 4. Normalize to Base 100
         normalized_df = (combined_df / last_close_prev_year) * 100
         
         # Metrics Display
@@ -95,52 +82,56 @@ if not df.empty:
             ytd_pct = val - 100
             col.metric(name, f"{val:.2f}", f"{ytd_pct:+.2f}%")
 
-        # Visualization
-        fig = go.Figure()
-
-        for column in normalized_df.columns:
-            fig.add_trace(go.Scatter(
-                x=normalized_df.index,
-                y=normalized_df[column],
-                mode='lines',
-                name=column,
-                hovertemplate='%{x}<br>' + f'{column}: ' + '%{y:.2f}' + '<extra></extra>'
-            ))
-
-        fig.update_layout(
-            template='plotly_dark',
-            xaxis_title="Date",
-            yaxis_title="Base 100 (Indexed to Prev Year Close)",
-            hovermode='x unified',
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="right",
-                x=1
-            ),
-            margin=dict(l=20, r=20, t=50, b=20),
-            height=600
+        # ECharts Visualization
+        x_data = normalized_df.index.strftime('%Y-%m-%d').tolist()
+        
+        line = (
+            Line(init_opts=opts.InitOpts(theme="dark", height="600px", width="100%"))
+            .add_xaxis(xaxis_data=x_data)
         )
         
-        # Highlight the 100 baseline
-        fig.add_hline(y=100, line_dash="dash", line_color="gray", annotation_text="Prev Year Close")
-
-        st.plotly_chart(fig, use_container_width=True)
+        for name in normalized_df.columns:
+            line.add_yaxis(
+                series_name=name,
+                y_axis=normalized_df[name].round(2).tolist(),
+                symbol="none",
+                is_smooth=True,
+                label_opts=opts.LabelOpts(is_show=False),
+            )
+            
+        line.set_global_opts(
+            title_opts=opts.TitleOpts(title="Index Performance (Base 100)", subtitle="Relative to Prev Year Close"),
+            tooltip_opts=opts.TooltipOpts(trigger="axis", axis_pointer_type="cross"),
+            legend_opts=opts.LegendOpts(pos_top="5%", pos_right="5%"),
+            xaxis_opts=opts.AxisOpts(type_="category", boundary_gap=False),
+            yaxis_opts=opts.AxisOpts(
+                type_="value", 
+                min_="dataMin",
+                splitline_opts=opts.SplitLineOpts(is_show=True),
+            ),
+            datazoom_opts=[opts.DataZoomOpts(is_show=True, type_="slider")],
+        )
         
-        # Raw Data Section
+        # Add MarkLine for 100 baseline
+        line.set_series_opts(
+            markline_opts=opts.MarkLineOpts(
+                data=[opts.MarkLineItem(y_axis=100, label="Prev Year Close")],
+                linestyle_opts=opts.LineStyleOpts(type_="dashed", color="gray", opacity=0.5)
+            )
+        )
+
+        st_pyecharts(line, height="650px", key="index_chart")
+        
         with st.expander("Raw Data (Normalized)"):
             st.dataframe(normalized_df.style.format("{:.2f}"))
     else:
-        st.warning(f"전년도({current_year - 1}) 데이터를 찾을 수 없습니다. 현재 날짜: {datetime.now().strftime('%Y-%m-%d')}")
-        st.subheader("실제 가격 데이터")
-        st.dataframe(df)
+        st.warning(f"전년도({current_year - 1}) 데이터를 찾을 수 없습니다.")
 else:
-    st.error("데이터를 불러오지 못했습니다. Ticker 심볼을 확인하거나 네트워크 상태를 점검해주세요.")
+    st.error("데이터를 불러오지 못했습니다.")
 
 st.sidebar.info("""
 ### Information
 - **Source**: Yahoo Finance
-- **Method**: 전년도 마지막 종가(Close)를 100으로 설정하여 현재까지의 수익률을 계산합니다.
+- **Charts**: ECharts (pyecharts)
 - **Indices**: S&P500, NASDAQ, Dow Jones, Nikkei 225, Nifty50, Sensex, KOSPI, KOSDAQ
 """)
