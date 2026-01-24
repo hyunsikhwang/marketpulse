@@ -8,7 +8,7 @@ from datetime import datetime
 
 # Page configuration
 st.set_page_config(
-    page_title="Global Index Tracker (ECharts)",
+    page_title="Global Index Tracker",
     page_icon="📈",
     layout="wide"
 )
@@ -35,7 +35,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🌍 Global Stock Index Performance (ECharts)")
+st.title("🌍 Global Stock Index Performance")
 st.markdown("전년도 마지막 종가 기준 올해 수익률 추이 (Base 100)")
 
 # Indices definition
@@ -305,10 +305,3 @@ if not df.empty:
         st.warning(f"전년도({current_year - 1}) 데이터를 찾을 수 없습니다.")
 else:
     st.error("데이터를 불러오지 못했습니다.")
-
-st.sidebar.info("""
-### Information
-- **Source**: Yahoo Finance
-- **Charts**: ECharts (pyecharts)
-- **Indices**: S&P500, NASDAQ, Dow Jones, Nikkei 225, Nifty50, Sensex, KOSPI, KOSDAQ
-""")
