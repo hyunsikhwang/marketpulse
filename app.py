@@ -10,33 +10,69 @@ from datetime import datetime
 st.set_page_config(
     page_title="Global Index Tracker",
     page_icon="📈",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
-# Custom CSS for premium look
+# Custom CSS for premium look (consistent with ValueHorizon)
 st.markdown("""
     <style>
-    .main {
-        background-color: #0e1117;
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+    /* Minimize Streamlit Padding and Margins */
+    .block-container {
+        padding-top: 1.5rem !important;
+        padding-bottom: 0rem !important;
+        max-width: 1000px !important;
     }
-    .stMetric {
-        background-color: #f0f2f6;
-        padding: 15px;
-        border-radius: 10px;
-        border: 1px solid #dcdfe4;
-        color: #31333F;
+    
+    [data-testid="stHeader"] {
+        display: none;
     }
-    .stMetric label {
-        color: #555e6d !important;
+
+    /* Global Light Mode Styles */
+    .stApp {
+        background-color: #ffffff;
+        color: #1a1a1a;
+        font-family: 'Inter', sans-serif;
     }
-    .stMetric [data-testid="stMetricValue"] {
-        color: #1b1d21 !important;
+
+    /* Hero Section */
+    .hero-container {
+        padding: 1.5rem 0;
+        text-align: center;
+        border-bottom: 1px solid #f0f0f0;
+        margin-bottom: 1.5rem;
+    }
+
+    .hero-title {
+        font-size: 2.2rem;
+        font-weight: 700;
+        color: #111111;
+        margin-bottom: 0.25rem;
+        letter-spacing: -0.5px;
+    }
+
+    .hero-subtitle {
+        font-size: 0.95rem;
+        font-weight: 400;
+        color: #888888;
+    }
+
+    /* Hide Streamlit components */
+    #MainMenu, footer, header, .stDeployButton {
+        display: none !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🌍 Global Stock Index Performance")
-st.markdown("전년도 마지막 종가 기준 올해 수익률 추이 (Base 100)")
+# Hero Section
+st.markdown(f"""
+<div class="hero-container">
+    <div class="hero-title">🌍 Global Stock Index Performance</div>
+    <div class="hero-subtitle">전년도 마지막 종가 기준 올해 수익률 추이 (Base 100)</div>
+</div>
+""", unsafe_allow_html=True)
 
 # Indices definition
 indices = {
@@ -152,7 +188,7 @@ if not df.empty:
             body {{
                 margin: 0;
                 padding: 0;
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
                 background-color: transparent;
                 overflow: hidden;
             }}
@@ -164,28 +200,48 @@ if not df.empty:
                 background-color: transparent;
             }}
             .metric-card {{
-                background-color: #f0f2f6;
-                border: 1px solid #dcdfe4;
+                background-color: #ffffff;
+                border: 1px solid #eaeaea;
                 border-radius: 12px;
                 padding: 12px 15px;
                 width: calc(25% - 12px); /* Fixed width for uniformity */
                 box-sizing: border-box;
-                box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+                box-shadow: 0 2px 4px rgba(0,0,0,0.02);
                 display: flex;
                 flex-direction: column;
                 justify-content: center;
+                transition: all 0.25s ease;
                 /* Initial state for opacity to make entry feel smooth */
                 opacity: 0;
                 transform: scale(0.9);
-                transition: opacity 0.5s ease, transform 0.5s ease;
             }}
             .metric-card.ready {{
                 opacity: 1;
                 transform: scale(1);
             }}
-            .metric-label {{ font-size: 0.8rem; color: #555e6d; font-weight: 600; margin-bottom: 2px; }}
-            .metric-value {{ font-size: 1.4rem; font-weight: 800; color: #1b1d21; margin-bottom: 0px; }}
-            .metric-trend {{ font-size: 0.9rem; font-weight: 700; }}
+            .metric-card:hover {{
+                border-color: #007aff;
+                box-shadow: 0 8px 16px rgba(0,0,0,0.06);
+                background-color: #f9f9f9;
+            }}
+            .metric-label {{ 
+                font-size: 0.75rem; 
+                color: #888888; 
+                font-weight: 600; 
+                margin-bottom: 2px; 
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }}
+            .metric-value {{ 
+                font-size: 1.4rem; 
+                font-weight: 700; 
+                color: #111111; 
+                margin-bottom: 0px; 
+            }}
+            .metric-trend {{ 
+                font-size: 0.85rem; 
+                font-weight: 600; 
+            }}
             
             @media (max-width: 1000px) {{ .metric-card {{ width: calc(33.33% - 12px); }} }}
             @media (max-width: 700px) {{ .metric-card {{ width: calc(50% - 12px); }} }}
@@ -244,7 +300,7 @@ if not df.empty:
         x_data = normalized_df.index.strftime('%Y-%m-%d').tolist()
         
         line = (
-            Line(init_opts=opts.InitOpts(theme="dark", height="600px", width="100%"))
+            Line(init_opts=opts.InitOpts(theme="light", height="600px", width="100%"))
             .add_xaxis(xaxis_data=x_data)
         )
         
@@ -283,7 +339,7 @@ if not df.empty:
             yaxis_opts=opts.AxisOpts(
                 type_="value", 
                 min_="dataMin",
-                splitline_opts=opts.SplitLineOpts(is_show=True, linestyle_opts=opts.LineStyleOpts(opacity=0.1)),
+                splitline_opts=opts.SplitLineOpts(is_show=True, linestyle_opts=opts.LineStyleOpts(opacity=0.3)),
             ),
             # Show full period (0-100%) by default
             datazoom_opts=[opts.DataZoomOpts(is_show=True, type_="slider", range_start=0, range_end=100)],
