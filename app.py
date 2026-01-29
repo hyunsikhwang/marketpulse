@@ -85,7 +85,10 @@ indices = {
     'KOSPI': '^KS11',
     'KOSDAQ': '^KQ11',
     'CSI 300': '000300.SS',
-    'SSE STAR 50': '000688.SS'
+    'SSE STAR 50': '000688.SS',
+    'Gold': 'GC=F',
+    'Silver': 'SI=F',
+    'Copper': 'HG=F'
 }
 
 @st.cache_data(ttl=3600)
