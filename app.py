@@ -78,6 +78,7 @@ st.markdown(f"""
 indices = {
     'S&P500': '^GSPC',
     'NASDAQ': '^IXIC',
+    'Russell 2000': '^RUT',
     'Dow Jones Industry': '^DJI',
     'Nikkei 225': '^N225',
     'Nifty50': '^NSEI',
