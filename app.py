@@ -290,9 +290,6 @@ if not df.empty:
                 font-weight: 700;
             }}
             
-            @media (max-width: 1000px) {{ .metric-card {{ width: calc(33.33% - 12px); }} }}
-            @media (max-width: 700px) {{ .metric-card {{ width: calc(50% - 12px); }} }}
-            @media (max-width: 480px) {{ .metric-card {{ width: 100%; }} }}
             </style>
             
             <div class="metrics-container" id="grid">
