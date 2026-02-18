@@ -152,6 +152,10 @@ if not df.empty:
         
         # Drop columns that are all NaN (if any failed to download)
         normalized_df = normalized_df.dropna(axis=1, how='all')
+        current_year_df = current_year_df[normalized_df.columns]
+        latest_price_series = combined_df.iloc[-1][normalized_df.columns]
+        year_high_series = current_year_df.max()
+        year_low_series = current_year_df.min()
         
         # Custom Card Animation Layout
         import json
@@ -166,9 +170,33 @@ if not df.empty:
             ytd_pct = val - 100
             trend_color = "#e63946" if ytd_pct < 0 else "#2a9d8f"
             trend_symbol = "▼" if ytd_pct < 0 else "▲"
+            current_price = latest_price_series.get(name)
+            year_high = year_high_series.get(name)
+            year_low = year_low_series.get(name)
+
+            if pd.notna(current_price) and pd.notna(year_high) and year_high > 0:
+                drawdown_from_high = ((year_high - current_price) / year_high) * 100
+            else:
+                drawdown_from_high = float("nan")
+
+            if pd.notna(current_price) and pd.notna(year_low) and year_low > 0:
+                rise_from_low = ((current_price - year_low) / year_low) * 100
+            else:
+                rise_from_low = float("nan")
             
             # Sanitize ID: only alphanumeric
             safe_id = "".join(filter(str.isalnum, name))
+
+            drawdown_html = (
+                f"고점 대비 <span class='metric-dd-value'>-{drawdown_from_high:.2f}%</span>"
+                if pd.notna(drawdown_from_high)
+                else "고점 대비 N/A"
+            )
+            rise_html = (
+                f"저점 대비 <span class='metric-rise-value'>+{rise_from_low:.2f}%</span>"
+                if pd.notna(rise_from_low)
+                else "저점 대비 N/A"
+            )
             
             cards_html += f"""
             <div class="metric-card" id="card-{safe_id}" data-name="{name}">
@@ -177,6 +205,8 @@ if not df.empty:
                 <div class="metric-trend" style="color: {trend_color};">
                     {trend_symbol} {abs(ytd_pct):.2f}%
                 </div>
+                <div class="metric-subtrend">{drawdown_html}</div>
+                <div class="metric-subtrend">{rise_html}</div>
             </div>
             """
 
@@ -245,6 +275,19 @@ if not df.empty:
             .metric-trend {{ 
                 font-size: 0.85rem; 
                 font-weight: 600; 
+            }}
+            .metric-subtrend {{
+                font-size: 0.72rem;
+                color: #6b7280;
+                line-height: 1.35;
+            }}
+            .metric-dd-value {{
+                color: #e63946;
+                font-weight: 700;
+            }}
+            .metric-rise-value {{
+                color: #2a9d8f;
+                font-weight: 700;
             }}
             
             @media (max-width: 1000px) {{ .metric-card {{ width: calc(33.33% - 12px); }} }}
