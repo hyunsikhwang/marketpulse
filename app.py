@@ -387,6 +387,10 @@ if not df.empty:
             # Show full period (0-100%) by default
             datazoom_opts=[opts.DataZoomOpts(is_show=True, type_="slider", range_start=0, range_end=100)],
         )
+
+        # Keep tooltip values as-is while sorting items by highest performance first.
+        if isinstance(line.options.get("tooltip"), dict):
+            line.options["tooltip"]["order"] = "valueDesc"
         
         # Add MarkLine for 100 baseline
         line.set_series_opts(
