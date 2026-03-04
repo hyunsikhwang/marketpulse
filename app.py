@@ -376,7 +376,7 @@ if not df.empty:
             
         line.set_global_opts(
             title_opts=opts.TitleOpts(title="Index Performance (Base 100)", subtitle="Relative to Prev Year Close"),
-            tooltip_opts=opts.TooltipOpts(trigger="axis", axis_pointer_type="cross"),
+            tooltip_opts=opts.TooltipOpts(trigger="axis", axis_pointer_type="cross", order="valueDesc"),
             legend_opts=opts.LegendOpts(is_show=False), # Hide legend as end labels are used
             xaxis_opts=opts.AxisOpts(type_="category", boundary_gap=False),
             yaxis_opts=opts.AxisOpts(
