@@ -3,7 +3,6 @@ import yfinance as yf
 import pandas as pd
 from pyecharts import options as opts
 from pyecharts.charts import Line
-from pyecharts.commons.utils import JsCode
 from streamlit_echarts import st_pyecharts
 from datetime import datetime
 
@@ -377,32 +376,7 @@ if not df.empty:
             
         line.set_global_opts(
             title_opts=opts.TitleOpts(title="Index Performance (Base 100)", subtitle="Relative to Prev Year Close"),
-            tooltip_opts=opts.TooltipOpts(
-                trigger="axis",
-                axis_pointer_type="cross",
-                formatter=JsCode(
-                    """
-                    function (params) {
-                        if (!Array.isArray(params) || params.length === 0) {
-                            return '';
-                        }
-
-                        const sorted = params.slice().sort(function(a, b) {
-                            return Number(b.value) - Number(a.value);
-                        });
-
-                        const axisLabel = sorted[0].axisValueLabel || sorted[0].axisValue || '';
-                        const lines = [axisLabel];
-
-                        for (const item of sorted) {
-                            lines.push(item.marker + item.seriesName + ': ' + item.value);
-                        }
-
-                        return lines.join('<br/>');
-                    }
-                    """
-                ),
-            ),
+            tooltip_opts=opts.TooltipOpts(trigger="axis", axis_pointer_type="cross"),
             legend_opts=opts.LegendOpts(is_show=False), # Hide legend as end labels are used
             xaxis_opts=opts.AxisOpts(type_="category", boundary_gap=False),
             yaxis_opts=opts.AxisOpts(
