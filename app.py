@@ -147,6 +147,13 @@ if "selected_base_date" not in st.session_state:
     st.session_state.selected_base_date = default_base_date
 
 date_col, reset_col = st.columns([5, 1])
+with reset_col:
+    st.write("")
+    reset_requested = st.button("Reset", use_container_width=True)
+
+if reset_requested:
+    st.session_state.selected_base_date = default_base_date
+
 with date_col:
     selected_base_date = st.date_input(
         "기준일 선택",
@@ -155,11 +162,9 @@ with date_col:
         max_value=df.index.max().date(),
         help="휴장일을 선택하면 해당 날짜 이전의 가장 가까운 거래일 종가를 기준으로 사용합니다.",
     )
-with reset_col:
-    st.write("")
-    if st.button("Reset", use_container_width=True):
-        st.session_state.selected_base_date = default_base_date
-        st.rerun()
+
+if reset_requested:
+    st.rerun()
 
 eligible_dates = df.index[df.index <= pd.Timestamp(selected_base_date)]
 if len(eligible_dates) == 0:
