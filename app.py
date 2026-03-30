@@ -141,13 +141,25 @@ if prev_year_df.empty:
     st.stop()
 
 default_base_timestamp = prev_year_df.index[-1]
-selected_base_date = st.date_input(
-    "기준일 선택",
-    value=default_base_timestamp.date(),
-    min_value=df.index.min().date(),
-    max_value=df.index.max().date(),
-    help="휴장일을 선택하면 해당 날짜 이전의 가장 가까운 거래일 종가를 기준으로 사용합니다.",
-)
+default_base_date = default_base_timestamp.date()
+
+if "selected_base_date" not in st.session_state:
+    st.session_state.selected_base_date = default_base_date
+
+date_col, reset_col = st.columns([5, 1])
+with date_col:
+    selected_base_date = st.date_input(
+        "기준일 선택",
+        key="selected_base_date",
+        min_value=df.index.min().date(),
+        max_value=df.index.max().date(),
+        help="휴장일을 선택하면 해당 날짜 이전의 가장 가까운 거래일 종가를 기준으로 사용합니다.",
+    )
+with reset_col:
+    st.write("")
+    if st.button("Reset", use_container_width=True):
+        st.session_state.selected_base_date = default_base_date
+        st.rerun()
 
 eligible_dates = df.index[df.index <= pd.Timestamp(selected_base_date)]
 if len(eligible_dates) == 0:
@@ -321,7 +333,7 @@ components.html(
                 const dx = firstRect.left - lastRect.left;
                 const dy = firstRect.top - lastRect.top;
 
-                if (dx === 0 && dy === 0) {{
+                if (dx == 0 && dy == 0) {{
                     return;
                 }}
 
