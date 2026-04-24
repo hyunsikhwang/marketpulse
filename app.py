@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import date, datetime
 
 import pandas as pd
 import streamlit as st
@@ -94,11 +94,14 @@ indices = {
     "Copper": "HG=F",
 }
 
+HISTORY_START_DATE = "2000-01-01"
+MIN_SELECTABLE_DATE = date(1900, 1, 1)
+
 
 @st.cache_data(ttl=3600)
 def fetch_data(indices_dict: dict[str, str]) -> pd.DataFrame:
     today = datetime.now()
-    start_date = datetime(today.year - 1, 1, 1).strftime("%Y-%m-%d")
+    start_date = HISTORY_START_DATE
     end_date = today.strftime("%Y-%m-%d")
     tickers = list(indices_dict.values())
 
@@ -158,7 +161,7 @@ with date_col:
     selected_base_date = st.date_input(
         "기준일 선택",
         key="selected_base_date",
-        min_value=df.index.min().date(),
+        min_value=MIN_SELECTABLE_DATE,
         max_value=df.index.max().date(),
         help="휴장일을 선택하면 해당 날짜 이전의 가장 가까운 거래일 종가를 기준으로 사용합니다.",
     )
@@ -166,14 +169,20 @@ with date_col:
 if reset_requested:
     st.rerun()
 
-eligible_dates = df.index[df.index <= pd.Timestamp(selected_base_date)]
-if len(eligible_dates) == 0:
-    st.warning("선택한 기준일 이전의 거래 데이터를 찾을 수 없습니다.")
-    st.stop()
+selected_base_timestamp = pd.Timestamp(selected_base_date)
+history_until_selected = df.loc[df.index <= selected_base_timestamp]
 
-effective_base_timestamp = eligible_dates[-1]
-base_close_series = df.loc[effective_base_timestamp]
-comparison_df = df[df.index >= effective_base_timestamp]
+if history_until_selected.empty:
+    base_close_series = df.ffill().iloc[0]
+    comparison_df = df.copy()
+else:
+    base_close_series = history_until_selected.ffill().iloc[-1]
+    comparison_df = df[df.index >= selected_base_timestamp]
+    if comparison_df.empty:
+        comparison_df = df[df.index >= history_until_selected.index[-1]]
+
+base_close_series = base_close_series.dropna()
+comparison_df = comparison_df[base_close_series.index]
 normalized_df = (comparison_df / base_close_series) * 100
 normalized_df = normalized_df.dropna(axis=1, how="all")
 
@@ -186,10 +195,22 @@ latest_price_series = comparison_df.iloc[-1]
 period_high_series = comparison_df.max()
 period_low_series = comparison_df.min()
 
-if effective_base_timestamp.date() != selected_base_date:
+if history_until_selected.empty:
+    earliest_available_date = df.index.min().strftime("%Y-%m-%d")
     st.caption(
-        f"선택한 날짜는 휴장일이어서 기준일을 {effective_base_timestamp.strftime('%Y-%m-%d')} 종가로 적용했습니다."
+        f"선택한 날짜 이전 데이터가 없어 가장 이른 거래일인 {earliest_available_date} 종가를 기준으로 적용했습니다."
     )
+else:
+    fallback_count = 0
+    for column in normalized_df.columns:
+        valid_dates = history_until_selected[column].dropna().index
+        if len(valid_dates) == 0 or valid_dates[-1].date() != selected_base_date:
+            fallback_count += 1
+
+    if fallback_count:
+        st.caption(
+            f"선택한 날짜에 종가가 없는 지수 {fallback_count}개는 각 지수의 직전 거래일 종가를 기준으로 적용했습니다."
+        )
 
 original_order = list(normalized_df.columns)
 latest_perf_series = normalized_df.iloc[-1]
