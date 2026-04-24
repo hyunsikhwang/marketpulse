@@ -1,3 +1,4 @@
+import json
 from datetime import date, datetime
 
 import pandas as pd
@@ -233,6 +234,7 @@ else:
 
 original_order = list(normalized_df.columns)
 latest_perf_series = normalized_df.iloc[-1]
+sorted_order = latest_perf_series.sort_values(ascending=False).index.tolist()
 
 metric_cards: list[dict[str, str | float]] = []
 for name in original_order:
@@ -265,75 +267,152 @@ for name in original_order:
             "period_pct": abs(period_pct),
             "drawdown_html": drawdown_html,
             "rise_html": rise_html,
+            "safe_id": "".join(filter(str.isalnum, name)),
         }
     )
 
-card_style = """
+cards_html = ""
+for card in metric_cards:
+    cards_html += f"""
+    <div class="metric-card" id="card-{card["safe_id"]}" data-name="{card["name"]}">
+        <div class="metric-label">{card["name"]}</div>
+        <div class="metric-value">{card["value"]:.2f}</div>
+        <div class="metric-trend" style="color: {card["trend_color"]};">
+            {card["trend_symbol"]} {card["period_pct"]:.2f}%
+        </div>
+        <div class="metric-subtrend">{card["drawdown_html"]}</div>
+        <div class="metric-subtrend">{card["rise_html"]}</div>
+    </div>
+    """
+
+card_markup = f"""
 <style>
-.metric-card {
+.metrics-container {{
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    padding: 5px 0;
+}}
+@media (max-width: 1100px) {{
+    .metrics-container {{
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }}
+}}
+@media (max-width: 640px) {{
+    .metrics-container {{
+        grid-template-columns: 1fr;
+    }}
+}}
+.metric-card {{
     background-color: #ffffff;
     border: 1px solid #eaeaea;
     border-radius: 12px;
     padding: 12px 15px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
     min-height: 118px;
-}
-.metric-label {
+    box-sizing: border-box;
+    opacity: 0;
+    transform: scale(0.92);
+    transition:
+        transform 0.85s cubic-bezier(0.34, 1.56, 0.64, 1),
+        opacity 0.35s ease,
+        border-color 0.25s ease,
+        box-shadow 0.25s ease,
+        background-color 0.25s ease;
+}}
+.metric-card.ready {{
+    opacity: 1;
+    transform: scale(1);
+}}
+.metric-card:hover {{
+    border-color: #007aff;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.06);
+    background-color: #f9f9f9;
+}}
+.metric-label {{
     font-size: 0.75rem;
     color: #888888;
     font-weight: 600;
     margin-bottom: 2px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-}
-.metric-value {
+}}
+.metric-value {{
     font-size: 1.4rem;
     font-weight: 700;
     color: #111111;
     margin-bottom: 0;
-}
-.metric-trend {
+}}
+.metric-trend {{
     font-size: 0.85rem;
     font-weight: 600;
-}
-.metric-subtrend {
+}}
+.metric-subtrend {{
     font-size: 0.72rem;
     color: #6b7280;
     line-height: 1.35;
-}
-.metric-dd-value {
+}}
+.metric-dd-value {{
     color: #e63946;
     font-weight: 700;
-}
-.metric-rise-value {
+}}
+.metric-rise-value {{
     color: #2a9d8f;
     font-weight: 700;
-}
+}}
 </style>
+<div class="metrics-container" id="metrics-grid">
+    {cards_html}
+</div>
+<script>
+(() => {{
+    const grid = document.getElementById("metrics-grid");
+    if (!grid) return;
+
+    const cards = Array.from(grid.querySelectorAll(".metric-card"));
+    const sortedOrder = {json.dumps(sorted_order)};
+
+    requestAnimationFrame(() => {{
+        cards.forEach((card, index) => {{
+            setTimeout(() => card.classList.add("ready"), index * 35);
+        }});
+    }});
+
+    setTimeout(() => {{
+        const firstRects = new Map(cards.map((card) => [card.dataset.name, card.getBoundingClientRect()]));
+        const sortedCards = sortedOrder
+            .map((name) => cards.find((card) => card.dataset.name === name))
+            .filter(Boolean);
+
+        sortedCards.forEach((card) => grid.appendChild(card));
+
+        sortedCards.forEach((card) => {{
+            const firstRect = firstRects.get(card.dataset.name);
+            const lastRect = card.getBoundingClientRect();
+            if (!firstRect || !lastRect) return;
+
+            const dx = firstRect.left - lastRect.left;
+            const dy = firstRect.top - lastRect.top;
+            if (dx === 0 && dy === 0) return;
+
+            card.style.transition = "none";
+            card.style.transform = `translate(${{dx}}px, ${{dy}}px) scale(1)`;
+
+            requestAnimationFrame(() => {{
+                card.style.transition = "transform 0.95s cubic-bezier(0.22, 1, 0.36, 1)";
+                card.style.transform = "translate(0, 0) scale(1)";
+            }});
+        }});
+    }}, 700);
+}})();
+</script>
 """
-st.markdown(card_style, unsafe_allow_html=True)
 
-sorted_metric_cards = sorted(metric_cards, key=lambda item: latest_perf_series[item["name"]], reverse=True)
-
-for row_start in range(0, len(sorted_metric_cards), 4):
-    row_cards = sorted_metric_cards[row_start : row_start + 4]
-    columns = st.columns(4)
-    for column, card in zip(columns, row_cards):
-        with column:
-            st.markdown(
-                f"""
-                <div class="metric-card">
-                    <div class="metric-label">{card["name"]}</div>
-                    <div class="metric-value">{card["value"]:.2f}</div>
-                    <div class="metric-trend" style="color: {card["trend_color"]};">
-                        {card["trend_symbol"]} {card["period_pct"]:.2f}%
-                    </div>
-                    <div class="metric-subtrend">{card["drawdown_html"]}</div>
-                    <div class="metric-subtrend">{card["rise_html"]}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+html_renderer = getattr(st, "html", None)
+if callable(html_renderer):
+    html_renderer(card_markup, unsafe_allow_javascript=True)
+else:
+    st.markdown(card_markup, unsafe_allow_html=True)
 
 x_data = normalized_df.index.strftime("%Y-%m-%d").tolist()
 line = Line(init_opts=opts.InitOpts(theme="light", height="600px", width="100%")).add_xaxis(xaxis_data=x_data)
