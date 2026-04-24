@@ -24,7 +24,7 @@ st.markdown(
     .block-container {
         padding-top: 1.5rem !important;
         padding-bottom: 0 !important;
-        max-width: 1240px !important;
+        max-width: 1000px !important;
     }
 
     [data-testid="stHeader"] {
@@ -409,6 +409,24 @@ card_markup = f"""
 """
 
 html_renderer = getattr(st, "html", None)
+chart_width_style = """
+<style>
+.chart-full-width {
+    width: min(1240px, calc(100vw - 3rem));
+    margin-left: 50%;
+    transform: translateX(-50%);
+}
+@media (max-width: 1300px) {
+    .chart-full-width {
+        width: 100%;
+        margin-left: 0;
+        transform: none;
+    }
+}
+</style>
+"""
+st.markdown(chart_width_style, unsafe_allow_html=True)
+
 if callable(html_renderer):
     html_renderer(card_markup, unsafe_allow_javascript=True)
 else:
@@ -474,7 +492,9 @@ line.set_series_opts(
     )
 )
 
+st.markdown('<div class="chart-full-width">', unsafe_allow_html=True)
 st_pyecharts(line, height="650px", key="index_chart")
+st.markdown("</div>", unsafe_allow_html=True)
 
 with st.expander("Raw Data (Normalized)"):
     st.dataframe(normalized_df.style.format("{:.2f}"))
