@@ -24,7 +24,7 @@ st.markdown(
     .block-container {
         padding-top: 1.5rem !important;
         padding-bottom: 0 !important;
-        max-width: 1000px !important;
+        max-width: 1240px !important;
     }
 
     [data-testid="stHeader"] {
