@@ -1,9 +1,7 @@
-import json
 from datetime import date, datetime
 
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
 import yfinance as yf
 from pyecharts import options as opts
 from pyecharts.charts import Line
@@ -99,28 +97,46 @@ MIN_SELECTABLE_DATE = date(1900, 1, 1)
 
 
 @st.cache_data(ttl=3600)
-def fetch_data(indices_dict: dict[str, str]) -> pd.DataFrame:
+def fetch_data(indices_dict: dict[str, str]) -> tuple[pd.DataFrame, list[str]]:
     today = datetime.now()
     start_date = HISTORY_START_DATE
     end_date = today.strftime("%Y-%m-%d")
-    tickers = list(indices_dict.values())
+    close_frames: list[pd.Series] = []
+    failed_indices: list[str] = []
 
     try:
-        data = yf.download(tickers, start=start_date, end=end_date, progress=False)
-        if data.empty:
-            return pd.DataFrame()
+        for name, ticker in indices_dict.items():
+            data = yf.download(ticker, start=start_date, end=end_date, progress=False)
+            if data.empty:
+                failed_indices.append(name)
+                continue
 
-        if isinstance(data.columns, pd.MultiIndex) and "Close" in data.columns.levels[0]:
-            all_close = data["Close"]
-        else:
-            all_close = data[["Close"]] if "Close" in data.columns else data
+            if isinstance(data.columns, pd.MultiIndex):
+                if "Close" not in data.columns.levels[0]:
+                    failed_indices.append(name)
+                    continue
+                close_series = data["Close"].squeeze()
+            else:
+                if "Close" not in data.columns:
+                    failed_indices.append(name)
+                    continue
+                close_series = data["Close"]
 
-        inv_indices = {ticker: name for name, ticker in indices_dict.items()}
-        all_close = all_close.rename(columns=inv_indices).ffill()
-        return all_close.sort_index()
+            close_series = close_series.rename(name)
+            if close_series.dropna().empty:
+                failed_indices.append(name)
+                continue
+
+            close_frames.append(close_series)
+
+        if not close_frames:
+            return pd.DataFrame(), failed_indices
+
+        all_close = pd.concat(close_frames, axis=1).sort_index().ffill()
+        return all_close, failed_indices
     except Exception as exc:
         st.error(f"데이터 조회 중 오류가 발생했습니다: {exc}")
-        return pd.DataFrame()
+        return pd.DataFrame(), list(indices_dict.keys())
 
 
 def format_metric_html(label: str, value: float, css_class: str, prefix: str = "") -> str:
@@ -130,11 +146,14 @@ def format_metric_html(label: str, value: float, css_class: str, prefix: str = "
 
 
 with st.spinner("데이터를 불러오고 있습니다..."):
-    df = fetch_data(indices)
+    df, failed_indices = fetch_data(indices)
 
 if df.empty:
     st.error("데이터를 불러오지 못했습니다.")
     st.stop()
+
+if failed_indices:
+    st.caption(f"가격 데이터를 불러오지 못한 지수는 제외했습니다: {', '.join(failed_indices)}")
 
 current_year = datetime.now().year
 prev_year_df = df[df.index.year == (current_year - 1)]
@@ -214,9 +233,8 @@ else:
 
 original_order = list(normalized_df.columns)
 latest_perf_series = normalized_df.iloc[-1]
-sorted_order = latest_perf_series.sort_values(ascending=False).index.tolist()
 
-cards_html = ""
+metric_cards: list[dict[str, str | float]] = []
 for name in original_order:
     val = latest_perf_series[name]
     period_pct = val - 100
@@ -236,147 +254,86 @@ for name in original_order:
     else:
         rise_from_low = float("nan")
 
-    safe_id = "".join(filter(str.isalnum, name))
     drawdown_html = format_metric_html("고점 대비 ", drawdown_from_high, "metric-dd-value", prefix="-")
     rise_html = format_metric_html("저점 대비 ", rise_from_low, "metric-rise-value", prefix="+")
+    metric_cards.append(
+        {
+            "name": name,
+            "value": val,
+            "trend_color": trend_color,
+            "trend_symbol": trend_symbol,
+            "period_pct": abs(period_pct),
+            "drawdown_html": drawdown_html,
+            "rise_html": rise_html,
+        }
+    )
 
-    cards_html += f"""
-    <div class="metric-card" id="card-{safe_id}" data-name="{name}">
-        <div class="metric-label">{name}</div>
-        <div class="metric-value">{val:.2f}</div>
-        <div class="metric-trend" style="color: {trend_color};">
-            {trend_symbol} {abs(period_pct):.2f}%
-        </div>
-        <div class="metric-subtrend">{drawdown_html}</div>
-        <div class="metric-subtrend">{rise_html}</div>
-    </div>
-    """
+card_style = """
+<style>
+.metric-card {
+    background-color: #ffffff;
+    border: 1px solid #eaeaea;
+    border-radius: 12px;
+    padding: 12px 15px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+    min-height: 118px;
+}
+.metric-label {
+    font-size: 0.75rem;
+    color: #888888;
+    font-weight: 600;
+    margin-bottom: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.metric-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #111111;
+    margin-bottom: 0;
+}
+.metric-trend {
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+.metric-subtrend {
+    font-size: 0.72rem;
+    color: #6b7280;
+    line-height: 1.35;
+}
+.metric-dd-value {
+    color: #e63946;
+    font-weight: 700;
+}
+.metric-rise-value {
+    color: #2a9d8f;
+    font-weight: 700;
+}
+</style>
+"""
+st.markdown(card_style, unsafe_allow_html=True)
 
-num_rows = (len(original_order) + 3) // 4
-component_height = num_rows * 135 + 10
+sorted_metric_cards = sorted(metric_cards, key=lambda item: latest_perf_series[item["name"]], reverse=True)
 
-components.html(
-    f"""
-    <style>
-    body {{
-        margin: 0;
-        padding: 0;
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        background-color: transparent;
-        overflow: hidden;
-    }}
-    .metrics-container {{
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        padding: 5px;
-        background-color: transparent;
-    }}
-    .metric-card {{
-        background-color: #ffffff;
-        border: 1px solid #eaeaea;
-        border-radius: 12px;
-        padding: 12px 15px;
-        width: calc(25% - 12px);
-        box-sizing: border-box;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        transition: all 0.25s ease;
-        opacity: 0;
-        transform: scale(0.9);
-    }}
-    .metric-card.ready {{
-        opacity: 1;
-        transform: scale(1);
-    }}
-    .metric-card:hover {{
-        border-color: #007aff;
-        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.06);
-        background-color: #f9f9f9;
-    }}
-    .metric-label {{
-        font-size: 0.75rem;
-        color: #888888;
-        font-weight: 600;
-        margin-bottom: 2px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }}
-    .metric-value {{
-        font-size: 1.4rem;
-        font-weight: 700;
-        color: #111111;
-        margin-bottom: 0;
-    }}
-    .metric-trend {{
-        font-size: 0.85rem;
-        font-weight: 600;
-    }}
-    .metric-subtrend {{
-        font-size: 0.72rem;
-        color: #6b7280;
-        line-height: 1.35;
-    }}
-    .metric-dd-value {{
-        color: #e63946;
-        font-weight: 700;
-    }}
-    .metric-rise-value {{
-        color: #2a9d8f;
-        font-weight: 700;
-    }}
-    </style>
-
-    <div class="metrics-container" id="grid">
-        {cards_html}
-    </div>
-
-    <script>
-    window.onload = function() {{
-        const grid = document.getElementById('grid');
-        const cards = Array.from(grid.querySelectorAll('.metric-card'));
-        const sortedOrder = {json.dumps(sorted_order)};
-
-        setTimeout(() => {{
-            cards.forEach(card => card.classList.add('ready'));
-        }}, 50);
-
-        setTimeout(() => {{
-            const firstRects = cards.map(card => card.getBoundingClientRect());
-            const sortedCards = sortedOrder
-                .map(name => cards.find(card => card.getAttribute('data-name') === name))
-                .filter(Boolean);
-
-            sortedCards.forEach(card => grid.appendChild(card));
-
-            sortedCards.forEach(card => {{
-                const name = card.getAttribute('data-name');
-                const originalIndex = cards.findIndex(item => item.getAttribute('data-name') === name);
-                const firstRect = firstRects[originalIndex];
-                const lastRect = card.getBoundingClientRect();
-                const dx = firstRect.left - lastRect.left;
-                const dy = firstRect.top - lastRect.top;
-
-                if (dx == 0 && dy == 0) {{
-                    return;
-                }}
-
-                card.style.transition = 'none';
-                card.style.transform = `translate(${{dx}}px, ${{dy}}px)`;
-
-                requestAnimationFrame(() => {{
-                    card.style.transition = 'transform 1s cubic-bezier(0.34, 1.56, 0.64, 1)';
-                    card.style.transform = 'translate(0, 0)';
-                }});
-            }});
-        }}, 800);
-    }};
-    </script>
-    """,
-    height=component_height,
-)
+for row_start in range(0, len(sorted_metric_cards), 4):
+    row_cards = sorted_metric_cards[row_start : row_start + 4]
+    columns = st.columns(4)
+    for column, card in zip(columns, row_cards):
+        with column:
+            st.markdown(
+                f"""
+                <div class="metric-card">
+                    <div class="metric-label">{card["name"]}</div>
+                    <div class="metric-value">{card["value"]:.2f}</div>
+                    <div class="metric-trend" style="color: {card["trend_color"]};">
+                        {card["trend_symbol"]} {card["period_pct"]:.2f}%
+                    </div>
+                    <div class="metric-subtrend">{card["drawdown_html"]}</div>
+                    <div class="metric-subtrend">{card["rise_html"]}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
 x_data = normalized_df.index.strftime("%Y-%m-%d").tolist()
 line = Line(init_opts=opts.InitOpts(theme="light", height="600px", width="100%")).add_xaxis(xaxis_data=x_data)
@@ -415,7 +372,7 @@ for i, name in enumerate(normalized_df.columns):
 line.set_global_opts(
     title_opts=opts.TitleOpts(
         title="Index Performance (Base 100)",
-        subtitle=f"Relative to {effective_base_timestamp.strftime('%Y-%m-%d')} Close",
+        subtitle=f"Relative to {selected_base_date:%Y-%m-%d} or latest prior close by index",
     ),
     tooltip_opts=opts.TooltipOpts(trigger="axis", axis_pointer_type="cross", order="valueDesc"),
     legend_opts=opts.LegendOpts(is_show=False),
