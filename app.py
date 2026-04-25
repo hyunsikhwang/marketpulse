@@ -1,5 +1,8 @@
 import json
+import logging
+from contextlib import redirect_stderr, redirect_stdout
 from datetime import date, datetime
+from io import StringIO
 
 import pandas as pd
 import streamlit as st
@@ -95,6 +98,67 @@ indices = {
 
 HISTORY_START_DATE = "2000-01-01"
 MIN_SELECTABLE_DATE = date(1900, 1, 1)
+TICKER_START_DATES = {
+    "000688.SS": "2020-07-23",
+}
+
+
+def resolve_ticker_start_date(ticker: str, default_start_date: str) -> str:
+    ticker_start_date = TICKER_START_DATES.get(ticker)
+    if not ticker_start_date:
+        return default_start_date
+    return max(default_start_date, ticker_start_date)
+
+
+def download_history(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
+    effective_start_date = resolve_ticker_start_date(ticker, start_date)
+    sink = StringIO()
+    yf_logger = logging.getLogger("yfinance")
+    previous_level = yf_logger.level
+
+    try:
+        yf_logger.setLevel(logging.CRITICAL)
+        with redirect_stdout(sink), redirect_stderr(sink):
+            data = yf.download(
+                ticker,
+                start=effective_start_date,
+                end=end_date,
+                progress=False,
+                threads=False,
+            )
+        if not data.empty:
+            return data
+
+        with redirect_stdout(sink), redirect_stderr(sink):
+            return yf.Ticker(ticker).history(
+                start=effective_start_date,
+                end=end_date,
+                auto_adjust=False,
+                actions=False,
+            )
+    except Exception:
+        return pd.DataFrame()
+    finally:
+        yf_logger.setLevel(previous_level)
+
+
+def extract_close_series(data: pd.DataFrame, name: str) -> pd.Series | None:
+    if data.empty:
+        return None
+
+    if isinstance(data.columns, pd.MultiIndex):
+        if "Close" not in data.columns.levels[0]:
+            return None
+        close_series = data["Close"].squeeze()
+    else:
+        if "Close" not in data.columns:
+            return None
+        close_series = data["Close"]
+
+    close_series = close_series.rename(name)
+    if close_series.dropna().empty:
+        return None
+    return close_series
 
 
 @st.cache_data(ttl=3600)
@@ -107,24 +171,9 @@ def fetch_data(indices_dict: dict[str, str]) -> tuple[pd.DataFrame, list[str]]:
 
     try:
         for name, ticker in indices_dict.items():
-            data = yf.download(ticker, start=start_date, end=end_date, progress=False)
-            if data.empty:
-                failed_indices.append(name)
-                continue
-
-            if isinstance(data.columns, pd.MultiIndex):
-                if "Close" not in data.columns.levels[0]:
-                    failed_indices.append(name)
-                    continue
-                close_series = data["Close"].squeeze()
-            else:
-                if "Close" not in data.columns:
-                    failed_indices.append(name)
-                    continue
-                close_series = data["Close"]
-
-            close_series = close_series.rename(name)
-            if close_series.dropna().empty:
+            data = download_history(ticker, start_date, end_date)
+            close_series = extract_close_series(data, name)
+            if close_series is None:
                 failed_indices.append(name)
                 continue
 
@@ -133,7 +182,7 @@ def fetch_data(indices_dict: dict[str, str]) -> tuple[pd.DataFrame, list[str]]:
         if not close_frames:
             return pd.DataFrame(), failed_indices
 
-        all_close = pd.concat(close_frames, axis=1).sort_index().ffill()
+        all_close = pd.concat(close_frames, axis=1, sort=False).sort_index().ffill()
         return all_close, failed_indices
     except Exception as exc:
         st.error(f"데이터 조회 중 오류가 발생했습니다: {exc}")
