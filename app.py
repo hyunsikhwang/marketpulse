@@ -149,11 +149,22 @@ def extract_close_series(data: pd.DataFrame, name: str) -> pd.Series | None:
     if isinstance(data.columns, pd.MultiIndex):
         if "Close" not in data.columns.levels[0]:
             return None
-        close_series = data["Close"].squeeze()
+        close_data = data["Close"]
+        if isinstance(close_data, pd.DataFrame):
+            if close_data.shape[1] == 0:
+                return None
+            close_series = close_data.iloc[:, 0]
+        else:
+            close_series = close_data
     else:
         if "Close" not in data.columns:
             return None
         close_series = data["Close"]
+
+    if not isinstance(close_series, pd.Series):
+        if len(data.index) != 1:
+            return None
+        close_series = pd.Series([close_series], index=data.index)
 
     close_series = close_series.rename(name)
     if close_series.dropna().empty:
